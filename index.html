@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Coin Toss Pro</title>
+    <style>
+        :root {
+            --primary: #6c5ce7;
+            --secondary: #a29bfe;
+            --bg: #0f0c29;
+            --bg-grad: linear-gradient(to right, #24243e, #302b63, #0f0c29);
+            --gold: #ffd700;
+            --silver: #c0c0c0;
+            --text: #ffffff;
+            --panel: rgba(255, 255, 255, 0.1);
+            --success: #00b894;
+            --danger: #d63031;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+      
+        body {
+            background: var(--bg-grad);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- LAYOUT & UTILS --- */
+        .app-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            padding-bottom: 80px; /* Space for nav */
+            position: relative;
+        }
+
+        .page { display: none; animation: fadeIn 0.3s ease; }
+        .page.active { display: block; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { transform: translateY(0); } }
+
+        .card {
+            background: var(--panel);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        h2, h3 { margin-bottom: 10px; font-weight: 600; }
+        .text-center { text-align: center; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .text-gold { color: var(--gold); }
+        .text-green { color: var(--success); }
+        .text-red { color: var(--danger); }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        input:focus { outline: 2px solid var(--primary); }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            font-size: 16px;
+        }
+      
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-disabled { background: #555; cursor: not-allowed; opacity: 0.6; }
+
+        /* --- COIN GAME --- */
+        .timer-bar {
+            width: 100%;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .timer-fill {
+            height: 100%;
+            background: var(--gold);
+            width: 100%;
+            transition: width 1s linear;
+        }
+
+        .coin-container {
+            width: 150px;
+            height: 150px;
+            margin: 30px auto;
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .coin {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            transform-style: preserve-3d;
+            transition: transform 3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .coin div {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            border: 5px solid rgba(255,255,255,0.2);
+        }
+
+        .side-head {
+            background: radial-gradient(circle at 30% 30%, var(--gold), #b8860b);
+            color: #5c4004;
+            text-shadow: 1px 1px 0 rgba(255,255,255,0.4);
+        }
+
+        .side-tail {
+            background: radial-gradient(circle at 30% 30%, var(--silver), #7f8c8d);
+            transform: rotateX(180deg);
+            color: #2c3e50;
+            text-shadow: 1px 1px 0 rgba(255,255,255,0.4);
+        }
+
+        .bet-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .bet-btn {
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid transparent;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 18px;
+            text-transform: uppercase;
+        }
+        .bet-btn.head { border-color: var(--gold); color: var(--gold); }
+        .bet-btn.tail { border-color: var(--silver); color: var(--silver); }
+        .bet-btn:active { background: rgba(255,255,255,0.1); }
+        .bet-btn:disabled { opacity: 0.3; filter: grayscale(1); }
+
+        /* Recent Wins Auto-Scroll Container */
+        #recent-results-list {
+            height: 150px; /* Fixed height for scrolling */
+            overflow: hidden;
+            position: relative;
+        }
+
+        #scroll-content {
+            animation: scroll-up linear infinite;
+        }
+        
+        /* Define the initial animation keyframes. JS will update the duration */
+        @keyframes scroll-up {
+            from { transform: translateY(0); }
+            to { transform: translateY(calc(-100% + 150px)); } /* 150px is the height of the container */
+        }
+      
+        /* --- WALLET & HISTORY --- */
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 14px;
+        }
+        .history-item:last-child { border: none; }
+      
+        /* --- BOTTOM NAV --- */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 70px;
+            background: #1a1a2e;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            z-index: 99;
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #666;
+            font-size: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .nav-item.active { color: var(--primary); }
+        .nav-icon {
+            font-size: 20px;
+            margin-bottom: 4px;
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            background-color: currentColor;
+            -webkit-mask-repeat: no-repeat;
+            -webkit-mask-position: center;
+        }
+
+        /* CSS Shapes for Icons - kept for completeness */
+        .icon-game { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z'/%3E%3C/svg%3E"); }
+        .icon-wallet { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z'/%3E%3C/svg%3E"); }
+        .icon-profile { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E"); }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.8);
+            display: none; justify-content: center; align-items: center;
+            z-index: 200;
+        }
+        .modal {
+            background: #2d3436;
+            padding: 25px;
+            border-radius: 15px;
+            width: 85%;
+            max-width: 350px;
+            text-align: center;
+            animation: zoomIn 0.2s;
+        }
+        @keyframes zoomIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+      
+        /* BET SLIP MODAL SPECIFIC STYLES */
+        #bet-slip-modal .modal { text-align: left; }
+    </style>
+
+</head>
+<body>
+<!-- APP CONTAINER -->
+<div class="app-container">
+      
+    <!-- === HOME PAGE === -->
+    <div id="home-page" class="page active">
+        <div class="flex-between">
+            <h3>Coin Clash</h3>
+            <!-- Balance Display -->
+            <div class="card" style="padding: 5px 15px; margin:0;">
+                ₹<span class="balance-display">0</span>
+            </div>
+        </div>
+
+        <!-- Custom: Members Playing -->
+        <p class="text-center text-gold" style="margin-top: 15px; font-weight: bold; font-size: 16px; padding: 5px 0;">
+            🔥 1 Lakh + Members Playing This Round!
+        </p>
+
+        <div style="margin-top: 10px;">
+            <div class="flex-between" style="font-size: 12px; margin-bottom: 5px;">
+                <span id="timer-text">Next Round: 60s</span>
+                <span id="game-status" class="text-green">Place Bets</span>
+            </div>
+            <div class="timer-bar"><div class="timer-fill" id="timer-fill"></div></div>
+        </div>
+
+        <div class="coin-container">
+            <div class="coin" id="coin">
+                <div class="side-head">HEAD</div>
+                <div class="side-tail">TAIL</div>
+            </div>
+        </div>
+
+        <div class="bet-controls">
+            <button class="bet-btn head" onclick="openBetSlipModal('HEAD')">HEAD</button>
+            <button class="bet-btn tail" onclick="openBetSlipModal('TAIL')">TAIL</button>
+        </div>
+
+        <div style="margin-top: 30px;">
+            <h4>Recent Results (Auto-Scrolling)</h4>
+            <!-- Custom: Text-based Recent Wins with Auto-Scroll -->
+            <div id="recent-results-list" class="card" style="margin-top: 10px;">
+                <div id="scroll-content">
+                    <!-- Dynamic content will be injected here by renderRecentResults -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- === WALLET PAGE === -->
+    <div id="wallet-page" class="page">
+        <h2 class="text-center">My Wallet</h2>
+        <div class="card text-center" style="margin-top: 20px; padding: 30px;">
+            <p style="color:#aaa;">Available Balance</p>
+            <h1 style="font-size: 36px;">₹<span class="balance-display">0</span></h1>
+        </div>
+
+        <div class="flex-between" style="gap: 15px;">
+            <button class="btn-success" onclick="openPaymentModal('Deposit')">Deposit</button>
+            <button class="btn-primary" onclick="openPaymentModal('Withdraw')">Withdraw</button>
+        </div>
+
+        <h3 style="margin-top: 30px;">Transaction History</h3>
+        <div id="wallet-history" class="card">
+            <p class="text-center" style="color: #666;">No transactions yet.</p>
+        </div>
+    </div>
+
+    <!-- === PROFILE PAGE === -->
+    <div id="profile-page" class="page">
+        <h2 class="text-center">Profile</h2>
+        <div class="card text-center">
+            <div style="width: 60px; height: 60px; background: var(--primary); border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; font-size: 24px;">👤</div>
+            <h3 id="profile-name">User</h3>
+            <button style="font-size: 12px; width: auto; padding: 5px 10px; background: rgba(255,255,255,0.1); color: #fff;" onclick="editName()">Edit Name</button>
+        </div>
+
+        <div class="card">
+            <div class="flex-between">
+                <span>Refer Code</span>
+                <strong class="text-gold" id="refer-code">------</strong>
+            </div>
+            <div class="flex-between" style="margin-top: 10px;">
+                <span>Refer Earnings</span>
+                <span class="text-green">₹<span id="refer-earnings">0</span></span>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Stats</h3>
+            <div class="flex-between" style="margin-top: 10px;">
+                <span>Games Played</span>
+                <span id="stats-played">0</span>
+            </div>
+            <div class="flex-between" style="margin-top: 10px;">
+                <span>Win Rate</span>
+                <span id="stats-winrate">0%</span>
+            </div>
+        </div>
+
+        <!-- Custom: Contact Support -->
+        <div class="card" style="margin-top: 20px;">
+            <h3>Support</h3>
+            <button class="btn-primary" onclick="window.location.href='https://t.me/agentxlock'" style="margin-top: 10px; background: #0088cc;">
+                <span style="display:inline-block; margin-right: 5px;">📞</span> Contact Telegram Support
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<!-- BET SLIP (Moved to Modal) -->
+<div class="modal-overlay" id="bet-slip-modal">
+    <div class="modal">
+        <div class="flex-between" style="margin-bottom: 15px;">
+            <h3 style="margin:0;">Place Bet on <span id="slip-selection" class="text-gold"></span></h3>
+            <span onclick="closeBetSlipModal()" style="cursor: pointer; font-size: 20px;">✕</span>
+        </div>
+        <div>
+            <label style="font-size: 12px; color: #aaa;">Enter Amount (₹)</label>
+            <input type="number" id="bet-amount" placeholder="Min ₹10">
+        </div>
+        <button id="confirm-bet-btn" class="btn-primary" onclick="placeBet()">Confirm Bet</button>
+    </div>
+</div>
+
+<!-- GENERIC MODAL -->
+<div class="modal-overlay" id="generic-modal">
+    <div class="modal">
+        <h2 id="modal-title">Title</h2>
+        <p id="modal-msg" style="margin: 15px 0; color: #ccc;">Message</p>
+        <button class="btn-primary" onclick="closeModal()">OK</button>
+    </div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div class="modal-overlay" id="payment-modal">
+    <div class="modal">
+        <h2 id="payment-title">Deposit</h2>
+        <!-- Placeholder is updated in JS to reflect MIN_DEPOSIT -->
+        <input type="number" id="payment-amount" placeholder="Amount (Min ₹200)" style="margin-top: 15px;">
+        <!-- payment-method is dynamically shown/hidden by JS for Deposit/Withdraw -->
+        <input type="text" id="payment-method" placeholder="UPI ID / Bank" style="margin-top: 5px;">
+        <div class="flex-between" style="gap: 10px; margin-top: 15px;">
+            <button class="btn-danger" onclick="document.getElementById('payment-modal').style.display='none'">Cancel</button>
+            <button class="btn-success" onclick="processPayment()">Submit</button>
+        </div>
+    </div>
+</div>
+
+<!-- BOTTOM NAVIGATION -->
+<div class="bottom-nav">
+    <div class="nav-item active" onclick="switchTab('home')">
+        <div class="nav-icon icon-game"></div>
+        <span>Game</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('wallet')">
+        <div class="nav-icon icon-wallet"></div>
+        <span>Wallet</span>
+    </div>
+    <div class="nav-item" onclick="switchTab('profile')">
+        <div class="nav-icon icon-profile"></div>
+        <span>Profile</span>
+    </div>
+</div>
+
+<script>
+    /* --- CONSTANTS --- */
+    const DB_KEY = 'coin_toss_app_v1';
+    const MIN_BET = 10;
+    const MIN_DEPOSIT = 200; // Minimum deposit limit
+    const DEPOSIT_REDIRECT_LINK = 'https://videoteraplaybox.blogspot.com/2025/12/blog-post_4.html?m=1';
+
+    /* --- STATE MANAGEMENT & LOCAL STORAGE --- */
+    let db; 
+    let simInterval; 
+
+    function generateReferCode() {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+        return result;
+    }
+
+    function saveDB() {
+        // IMPORTANT: Ensure balance is explicitly set to 0 before saving if needed
+        // For game logic, we'll override the balance changes in placeBet and processResult
+
+        localStorage.setItem(DB_KEY, JSON.stringify(db));
+        updateUI();
+    }
+
+    /* --- UI UPDATES --- */
+    function updateUI() {
+        // Balance is FORCED to 0 for display
+        document.querySelectorAll('.balance-display').forEach(el => el.innerText = '0');
+          
+        // Profile
+        document.getElementById('profile-name').innerText = db.name;
+        document.getElementById('refer-code').innerText = db.referCode;
+        document.getElementById('refer-earnings').innerText = db.referEarnings;
+          
+        // Stats
+        document.getElementById('stats-played').innerText = db.gameStats.played;
+        const winRate = db.gameStats.played === 0 ? 0 : Math.round((db.gameStats.wins / db.gameStats.played) * 100);
+        document.getElementById('stats-winrate').innerText = winRate + '%';
+
+        // History & Recent Wins
+        renderWalletHistory();
+        renderRecentResults();
+    }
+    
+    // Custom: Generate dynamic player names 
+    const BASE_NAMES = ['Pooja', 'Vikas', 'Suraj', 'Kiran', 'Rahul', 'Neha', 'Ravi', 'Anjali', 'Mohan', 'Sunita', 'Player', 'User'];
+    function generateRandomPlayerName() {
+        const nameType = Math.random();
+        if (nameType < 0.4) { 
+            return BASE_NAMES[Math.floor(Math.random() * BASE_NAMES.length)];
+        } else if (nameType < 0.8) { 
+            return `Player${Math.floor(Math.random() * 900) + 100}`;
+        } else { 
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let initial = chars.charAt(Math.floor(Math.random() * chars.length));
+            return `${initial}***`;
+        }
+    }
+
+    // Custom: Render and handle auto-scroll for recent results
+    function renderRecentResults() {
+        const container = document.getElementById('scroll-content');
+        const results = db.recentGameResults;
+
+        if (results.length === 0) {
+            container.innerHTML = '<p class="text-center" style="color: #666;">No recent activity.</p>';
+            container.style.animation = 'none';
+            return;
+        }
+
+        let html = '';
+        results.forEach(r => {
+            const color = r.type === 'win' ? 'text-green' : 'text-red';
+            const outcomeText = r.type === 'win' ? `Won ₹${r.amount}` : `Lost ₹${r.amount}`;
+            html += `<div class="flex-between history-item" style="border:none; padding: 5px 0;">
+                        <span style="font-weight: bold;">${r.name}</span>
+                        <span class="${color}" style="font-weight: bold;">${outcomeText}</span>
+                    </div>`;
+        });
+        container.innerHTML = html + html;
+
+        // Calculate and apply scroll animation duration
+        const resultHeight = 35; 
+        const totalHeight = results.length * resultHeight;
+        const duration = results.length > 4 ? (totalHeight / 30) : 0;
+        
+        if (duration > 0) {
+            container.style.animation = `scroll-up ${duration}s linear infinite`;
+            const styleSheet = document.styleSheets[0];
+            const rule = Array.from(styleSheet.cssRules).find(r => r.name === 'scroll-up');
+            if(rule) {
+                const newToValue = totalHeight > 150 ? `translateY(-${totalHeight}px)` : 'translateY(0)';
+                rule.deleteRule('100%');
+                rule.appendRule(`to { transform: ${newToValue}; }`);
+            }
+
+        } else {
+            container.style.animation = 'none';
+        }
+    }
+    
+    // Custom: Simulate wins and losses for the scrolling list
+    function simulateRecentWinsLoop() {
+        simInterval = setInterval(() => {
+            const isWin = Math.random() < 0.6;
+            const amount = Math.floor(Math.random() * 49 + 1) * 10;
+            
+            db.recentGameResults.unshift({
+                name: generateRandomPlayerName(),
+                amount: amount,
+                type: isWin ? 'win' : 'loss'
+            });
+            db.recentGameResults = db.recentGameResults.slice(0, 20);
+            saveDB();
+        }, 3000);
+    }
+
+
+    function renderWalletHistory() {
+        const container = document.getElementById('wallet-history');
+        const txs = db.history.filter(h => h.type !== 'game').reverse();
+          
+        if (txs.length === 0) {
+            container.innerHTML = '<p class="text-center" style="color: #666;">No transactions yet.</p>';
+            return;
+        }
+
+        let html = '';
+        txs.forEach(tx => {
+            const color = tx.type === 'dep' ? 'text-green' : 'text-red';
+            const sign = tx.type === 'dep' ? '+' : '-';
+            const dateObj = new Date(tx.date);
+            const dateText = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
+            
+            html += `
+                <div class="history-item">
+                    <div>
+                        <div style="font-weight: bold;">${tx.detail}</div>
+                        <div style="font-size: 10px; color: #888;">${dateText}</div>
+                    </div>
+                    <div class="${color}" style="font-weight: bold;">${sign}₹${tx.amount}</div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    /* --- NAVIGATION --- */
+    function switchTab(tabName) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(tabName + '-page').classList.add('active');
+          
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const idx = ['home', 'wallet', 'profile'].indexOf(tabName);
+        document.querySelectorAll('.nav-item')[idx].classList.add('active');
+          
+        if(tabName === 'wallet') renderWalletHistory();
+    }
+
+    /* --- GAME LOGIC --- */
+    let timeLeft = 60;
+    let isBettingLocked = false;
+    let currentBet = null;
+    let timerInterval;
+
+    function startGameLoop() {
+        clearInterval(timerInterval);
+        timeLeft = 60;
+        updateTimerUI();
+          
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerUI();
+
+            if (timeLeft <= 5) {
+                if (!isBettingLocked) {
+                    isBettingLocked = true;
+                    document.getElementById('game-status').innerText = "Bets Locked!";
+                    document.getElementById('game-status').className = "text-red";
+                    closeBetSlipModal();
+                    disableBetButtons(true);
+                }
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                if (currentBet) {
+                    spinCoin();
+                } else {
+                    setTimeout(resetRound, 2000);
+                }
+            }
+        }, 1000);
+    }
+
+    function updateTimerUI() {
+        document.getElementById('timer-text').innerText = `Next Round: ${timeLeft}s`;
+        const percent = (timeLeft / 60) * 100;
+        document.getElementById('timer-fill').style.width = percent + '%';
+        if(timeLeft < 10) document.getElementById('timer-fill').style.background = '#d63031';
+        else document.getElementById('timer-fill').style.background = '#ffd700';
+    }
+
+    function disableBetButtons(disable) {
+        document.querySelectorAll('.bet-btn').forEach(btn => btn.disabled = disable);
+    }
+
+    /* --- BETTING MODAL --- */
+    function openBetSlipModal(side) {
+        if (isBettingLocked) return;
+          
+        // Check balance against the hardcoded value of db.balance which is 0
+        if (db.balance < MIN_BET) {
+            showModal("Insufficient Balance", `Please deposit money to place a bet. Minimum bet is ₹${MIN_BET}.`);
+            return;
+        }
+
+        document.getElementById('slip-selection').innerText = side;
+        document.getElementById('bet-slip-modal').style.display = 'flex';
+        document.getElementById('bet-amount').focus();
+    }
+
+    function closeBetSlipModal() {
+        document.getElementById('bet-slip-modal').style.display = 'none';
+        document.getElementById('bet-amount').value = '';
+    }
+
+    function placeBet() {
+        const side = document.getElementById('slip-selection').innerText;
+        const amount = parseInt(document.getElementById('bet-amount').value);
+
+        if (!amount || amount < MIN_BET) {
+            showModal("Bet Error", `Minimum bet is ₹${MIN_BET}`);
+            return;
+        }
+        if (amount > db.balance) {
+            // This check will pass ONLY if db.balance is > 0, which it won't be, so this modal will always show if trying to bet > 0
+            showModal("Bet Error", "Insufficient balance!");
+            return;
+        }
+
+        // --- CRITICAL CHANGE: DEDUCT BALANCE LOGIC REMOVED/NULLIFIED ---
+        // db.balance -= amount; // <-- Intentional REMOVAL: Do not deduct balance
+        currentBet = { side, amount };
+        saveDB(); // Save other state changes (like bet info)
+
+        closeBetSlipModal();
+        document.getElementById('game-status').innerText = `Bet: ₹${amount} on ${side}`;
+        document.getElementById('game-status').className = "text-gold";
+        disableBetButtons(true);
+    }
+
+    /* --- ANIMATION & RESULTS --- */
+    function playFlipSound() { /* Placeholder for sound effect */ }
+
+    function spinCoin() {
+        playFlipSound();
+        const result = Math.random() < 0.5 ? 'HEAD' : 'TAIL';
+        const coin = document.getElementById('coin');
+          
+        const baseSpins = 1800;
+        const outcomeAngle = result === 'HEAD' ? 0 : 180;
+        const totalRotate = baseSpins + outcomeAngle;
+
+        coin.style.transform = `rotateX(${totalRotate}deg)`;
+
+        setTimeout(() => {
+            processResult(result);
+        }, 3000);
+    }
+
+    function processResult(result) {
+        const win = currentBet.side === result;
+        let msg = '';
+          
+        db.gameStats.played++;
+          
+        if (win) {
+            const winnings = Math.floor(currentBet.amount * 1.9);
+            // --- CRITICAL CHANGE: ADD TO BALANCE LOGIC REMOVED ---
+            // db.balance += winnings; // <-- Intentional REMOVAL: Do not add winnings to balance
+            db.gameStats.wins++;
+            msg = `You Won ₹${winnings}!`;
+            showModal("Congratulations!", msg);
+              
+            db.history.push({ type: 'game', amount: winnings, detail: `Won on ${result}`, date: new Date().toISOString() });
+            db.recentGameResults.unshift({ name: db.name, amount: winnings, type: 'win' });
+
+        } else {
+            msg = `Result was ${result}. Better luck next time.`;
+            showModal("You Lost", msg);
+              
+            db.history.push({ type: 'game', amount: currentBet.amount, detail: `Lost on ${currentBet.side} (Result: ${result})`, date: new Date().toISOString() });
+            db.recentGameResults.unshift({ name: db.name, amount: currentBet.amount, type: 'loss' });
+        }
+        
+        db.recentGameResults = db.recentGameResults.slice(0, 20);
+        saveDB();
+        setTimeout(resetRound, 2000);
+    }
+
+    function resetRound() {
+        document.getElementById('coin').style.transition = 'none';
+        document.getElementById('coin').style.transform = 'rotateX(0deg)';
+        void document.getElementById('coin').offsetWidth;
+        document.getElementById('coin').style.transition = 'transform 3s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+          
+        currentBet = null;
+        isBettingLocked = false;
+        disableBetButtons(false);
+        document.getElementById('game-status').innerText = "Place Bets";
+        document.getElementById('game-status').className = "text-green";
+          
+        startGameLoop();
+    }
+
+    /* --- WALLET & MODAL UTILS --- */
+    let currentTxType = '';
+
+    function openPaymentModal(type) {
+        currentTxType = type;
+        document.getElementById('payment-title').innerText = type + " Money";
+        document.getElementById('payment-amount').placeholder = type === 'Deposit' ? `Amount (Min ₹${MIN_DEPOSIT})` : 'Available Balance';
+          
+        const methodInput = document.getElementById('payment-method');
+        if (type === 'Deposit') {
+            methodInput.style.display = 'none';
+        } else {
+            methodInput.style.display = 'block';
+        }
+          
+        document.getElementById('payment-modal').style.display = 'flex';
+    }
+
+    function processPayment() {
+        const amt = parseInt(document.getElementById('payment-amount').value);
+        const method = document.getElementById('payment-method').value;
+
+        if (!amt) { alert("Please enter amount"); return; }
+          
+        if (currentTxType === 'Deposit') {
+            
+            // 1. Minimum Deposit Check
+            if (amt < MIN_DEPOSIT) {   
+                alert(`Minimum deposit is ₹${MIN_DEPOSIT}. Please enter a valid amount.`);   
+                return;
+            }
+              
+            // 2. Close Modal
+            document.getElementById('payment-modal').style.display = 'none';
+            
+            // 3. *** CRITICAL CHANGE: DO NOT ADD TO BALANCE ***
+            // The balance remains 0.
+            
+            // 4. Add 'Successful (Processing)' to History
+            db.history.push({ type: 'dep', amount: amt, detail: 'Deposit Successful (Processing)', date: new Date().toISOString() });
+            saveDB();
+            
+            // 5. Redirect to an external link (simulating payment attempt/failure)
+            setTimeout(() => {
+                window.location.href = DEPOSIT_REDIRECT_LINK;
+            }, 100);
+            return;
+              
+        } else { // Withdraw
+            if (!method || method.trim() === "") { alert("Please fill UPI ID / Bank details"); return; }
+            if (amt > db.balance) { 
+                // This will always show if amt > 0, as db.balance is 0
+                alert("Insufficient funds! Your balance is ₹0."); 
+                return; 
+            }
+
+            // If a user tries to withdraw 0 (the only possible successful withdrawal)
+            if(amt === 0) {
+                 showModal("Withdrawal Info", "You cannot withdraw a zero amount.");
+                 return;
+            }
+
+            // Withdrawals other than 0 will be blocked by the insufficient funds check above.
+        }
+    }
+
+    function editName() {
+        const newName = prompt("Enter your name:", db.name);
+        if (newName && newName.trim() !== "") {
+            db.name = newName.trim();
+            saveDB();
+        }
+    }
+
+    function showModal(title, msg) {
+        document.getElementById('modal-title').innerText = title;
+        document.getElementById('modal-msg').innerText = msg;
+        document.getElementById('generic-modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('generic-modal').style.display = 'none';
+    }
+
+    /* --- INITIALIZATION --- */
+    window.onload = function() {
+        // Mock data
+        const initialRecentResults = [  
+            {name: 'Pooja', amount: 250, type: 'win'},   
+            {name: 'Vikas', amount: 1200, type: 'win'},  
+            {name: 'Player567', amount: 100, type: 'loss'},
+            {name: 'A***', amount: 450, type: 'win'},
+            {name: 'Suraj', amount: 80, type: 'loss'}
+        ];
+        
+        const initialDB = {
+            // *** CRITICAL CHANGE: HARDCODED BALANCE TO 0 ***
+            balance: 0, 
+            name: 'Player',  
+            referCode: generateReferCode(),  
+            referEarnings: 0,  
+            // *** CRITICAL CHANGE: HISTORY IS CLEARED *** (as the previous image was part of a failed state)
+            history: [], 
+            gameStats: { played: 0, wins: 0 },  
+            recentGameResults: initialRecentResults
+        };
+        
+        db = initialDB;
+        saveDB(); // This calls updateUI which forces balance display to '0'
+
+        // Start the game loop and simulation
+        startGameLoop();
+        simulateRecentWinsLoop(); 
+        
+        // Start on the Wallet tab to show the 0 balance state clearly
+        switchTab('wallet');
+    }
+
+</script>
+
+</body>
+</html>
